@@ -5,7 +5,7 @@
 #                            | (__| |_| |  _ <| |___
 #                             \___|\___/|_| \_\_____|
 #
-# Copyright (C) 1998 - 2009, Daniel Stenberg, <daniel@haxx.se>, et al.
+# Copyright (C) 1998 - 2011, Daniel Stenberg, <daniel@haxx.se>, et al.
 #
 # This software is licensed as described in the file COPYING, which
 # you should have received as part of this distribution. The terms
@@ -58,7 +58,7 @@ CLEANFILES = hugehelp.c
 NROFF=env LC_ALL=C @NROFF@ @MANOPT@ # figured out by the configure script
 
 EXTRA_DIST = mkhelp.pl makefile.dj Makefile.vc6 Makefile.b32 Makefile.m32 \
-	Makefile.riscos curl_config.h.in macos/curl.mcp.xml.sit.hqx	  \
+	curl_config.h.in macos/curl.mcp.xml.sit.hqx			  \
 	macos/MACINSTALL.TXT macos/src/curl_GUSIConfig.cpp vc6curlsrc.dsp \
 	macos/src/macos_main.cpp config-amigaos.h makefile.amiga curl.rc  \
 	Makefile.netware Makefile.inc Makefile.Watcom vc6curlsrc.dsw      \
@@ -94,4 +94,14 @@ $(HUGE):
 	echo "/* built-in manual is disabled, blank function */" > $(HUGE)
 	echo '#include "hugehelp.h"' >> $(HUGE)
 	echo "void hugehelp(void) {}" >>$(HUGE)
+endif
+
+# ignore hugehelp.c since it is generated source code and it plays by slightly
+# different rules!
+checksrc:
+	@@PERL@ $(top_srcdir)/lib/checksrc.pl -D$(top_srcdir)/src -Whugehelp.c $(curl_SOURCES)
+
+if CURLDEBUG
+# for debug builds, we scan the sources on all regular make invokes
+all-local: checksrc
 endif

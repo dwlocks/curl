@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2009, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) 1998 - 2011, Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -47,6 +47,7 @@
 #include "urldata.h"
 #include "connect.h"
 #include "select.h"
+#include "warnless.h"
 
 /* Winsock and TPF sockets are not in range [0..FD_SETSIZE-1] */
 
@@ -355,7 +356,7 @@ int Curl_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms)
   int r;
 
   if(ufds) {
-    for (i = 0; i < nfds; i++) {
+    for(i = 0; i < nfds; i++) {
       if(ufds[i].fd != CURL_SOCKET_BAD) {
         fds_none = FALSE;
         break;
@@ -402,7 +403,7 @@ int Curl_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms)
   if(r == 0)
     return 0;
 
-  for (i = 0; i < nfds; i++) {
+  for(i = 0; i < nfds; i++) {
     if(ufds[i].fd == CURL_SOCKET_BAD)
       continue;
     if(ufds[i].revents & POLLHUP)
@@ -418,7 +419,7 @@ int Curl_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms)
   FD_ZERO(&fds_err);
   maxfd = (curl_socket_t)-1;
 
-  for (i = 0; i < nfds; i++) {
+  for(i = 0; i < nfds; i++) {
     ufds[i].revents = 0;
     if(ufds[i].fd == CURL_SOCKET_BAD)
       continue;
@@ -466,7 +467,7 @@ int Curl_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms)
     return 0;
 
   r = 0;
-  for (i = 0; i < nfds; i++) {
+  for(i = 0; i < nfds; i++) {
     ufds[i].revents = 0;
     if(ufds[i].fd == CURL_SOCKET_BAD)
       continue;

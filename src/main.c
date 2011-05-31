@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2010, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) 1998 - 2011, Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -20,6 +20,12 @@
  *
  ***************************************************************************/
 #include "setup.h"
+
+#include <curl/curl.h>
+
+/*
+** system headers
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,90 +42,106 @@
 #  endif
 #endif
 
-#include <curl/curl.h>
+#ifdef NETWARE
+#  ifdef __NOVELL_LIBC__
+#    include <screen.h>
+#  else
+#    include <nwconio.h>
+#    define mkdir mkdir_510
+#  endif
+#endif
+
+#ifdef HAVE_IO_H
+#  include <io.h>
+#endif
+
+#ifdef HAVE_UNISTD_H
+#  include <unistd.h>
+#endif
+
+#ifdef HAVE_FCNTL_H
+#  include <fcntl.h>
+#endif
+
+#ifdef HAVE_UTIME_H
+#  include <utime.h>
+#elif defined(HAVE_SYS_UTIME_H)
+#  include <sys/utime.h>
+#endif
+
+#ifdef HAVE_LIMITS_H
+#  include <limits.h>
+#endif
+
+#ifdef HAVE_SYS_POLL_H
+#  include <sys/poll.h>
+#elif defined(HAVE_POLL_H)
+#  include <poll.h>
+#endif
+
+#ifdef HAVE_LOCALE_H
+#  include <locale.h>
+#endif
+
+#ifdef HAVE_NETINET_IN_H
+#  include <netinet/in.h>
+#endif
+
+#ifdef HAVE_NETINET_TCP_H
+#  include <netinet/tcp.h>
+#endif
+
+#if defined(CURL_DOES_CONVERSIONS) && defined(HAVE_ICONV)
+#  include <iconv.h>
+/* set default codesets for iconv */
+#  ifndef CURL_ICONV_CODESET_OF_NETWORK
+#    define CURL_ICONV_CODESET_OF_NETWORK "ISO8859-1"
+#  endif
+#endif /* CURL_DOES_CONVERSIONS && HAVE_ICONV */
+
+#ifdef MSDOS
+#  include <dos.h>
+#endif
+
+#if defined(USE_WIN32_LARGE_FILES) || defined(USE_WIN32_SMALL_FILES)
+#  include <io.h>
+#  include <sys/types.h>
+#  include <sys/stat.h>
+#endif
+
+#ifdef WIN32
+#  include <direct.h>
+#endif
+
+/*
+** src subdirectory headers
+*/
 
 #include "urlglob.h"
 #include "writeout.h"
 #include "getpass.h"
 #include "homedir.h"
 #include "curlutil.h"
+#include "os-specific.h"
+#include "version.h"
+#include "xattr.h"
 #ifdef USE_MANUAL
-#include "hugehelp.h"
+#  include "hugehelp.h"
 #endif
 #ifdef USE_ENVIRONMENT
-#include "writeenv.h"
+#  include "writeenv.h"
 #endif
+
+/*
+** libcurl subdirectory headers
+*/
+
 #include "rawstr.h"
-
-#define CURLseparator   "--_curl_--"
-
-#ifdef NETWARE
-#ifdef __NOVELL_LIBC__
-#include <screen.h>
-#else
-#include <nwconio.h>
-#define mkdir mkdir_510
-#endif
-#endif
-
-#include "version.h"
-
-#ifdef HAVE_IO_H /* typical win32 habit */
-#include <io.h>
-#endif
-
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-
-#ifdef HAVE_FCNTL_H
-#include <fcntl.h>
-#endif
-
-#ifdef HAVE_UTIME_H
-#include <utime.h>
-#else
-#ifdef HAVE_SYS_UTIME_H
-#include <sys/utime.h>
-#endif
-
-#endif /* HAVE_UTIME_H */
-
-#ifdef HAVE_LIMITS_H
-#include <limits.h>
-#endif
-
-#ifdef HAVE_SYS_POLL_H
-#include <sys/poll.h>
-#elif defined(HAVE_POLL_H)
-#include <poll.h>
-#endif
-
-#ifdef HAVE_LOCALE_H
-#include <locale.h> /* for setlocale() */
-#endif
 
 #define ENABLE_CURLX_PRINTF
 /* make the curlx header define all printf() functions to use the curlx_*
    versions instead */
-#include "curlx.h" /* header from the libcurl directory */
-
-#if defined(CURL_DOES_CONVERSIONS) && defined(HAVE_ICONV)
-#include <iconv.h>
-/* set default codesets for iconv */
-#ifndef CURL_ICONV_CODESET_OF_NETWORK
-#define CURL_ICONV_CODESET_OF_NETWORK "ISO8859-1"
-#endif
-#endif /* CURL_DOES_CONVERSIONS && HAVE_ICONV */
-
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h> /* for IPPROTO_TCP */
-#endif
-#ifdef HAVE_NETINET_TCP_H
-#include <netinet/tcp.h> /* for TCP_KEEPIDLE, TCP_KEEPINTVL */
-#endif
-
-#include "os-specific.h"
+#include "curlx.h"
 
 /* The last #include file should be: */
 #ifdef CURLDEBUG
@@ -187,8 +209,6 @@ static char *sanitize_dos_name(char *);
 
 #ifdef MSDOS
 #define USE_WATT32
-#include <dos.h>
-
 #ifdef DJGPP
 /* we want to glob our own argv[] */
 char **__crt0_glob_function (char *arg)
@@ -211,6 +231,8 @@ char **__crt0_glob_function (char *arg)
 #define STDERR_FILENO  fileno(stderr)
 #endif
 
+#define CURLseparator   "--_curl_--"
+
 #define CURL_PROGRESS_STATS 0 /* default progress display */
 #define CURL_PROGRESS_BAR   1
 
@@ -229,9 +251,6 @@ typedef enum {
  */
 
 #ifdef USE_WIN32_LARGE_FILES
-#  include <io.h>
-#  include <sys/types.h>
-#  include <sys/stat.h>
 #  define lseek(fdes,offset,whence)  _lseeki64(fdes, offset, whence)
 #  define fstat(fdes,stp)            _fstati64(fdes, stp)
 #  define stat(fname,stp)            _stati64(fname, stp)
@@ -244,9 +263,6 @@ typedef enum {
  */
 
 #ifdef USE_WIN32_SMALL_FILES
-#  include <io.h>
-#  include <sys/types.h>
-#  include <sys/stat.h>
 #  define lseek(fdes,offset,whence)  _lseek(fdes, (long)offset, whence)
 #  define fstat(fdes,stp)            _fstat(fdes, stp)
 #  define stat(fname,stp)            _stat(fname, stp)
@@ -263,7 +279,6 @@ typedef enum {
 #endif
 
 #ifdef WIN32
-#  include <direct.h>
 #  define mkdir(x,y) (mkdir)(x)
 #  undef  PATH_MAX
 #  define PATH_MAX MAX_PATH
@@ -300,6 +315,22 @@ typedef enum {
 #    define SIZEOF_OFF_T 4
 #  endif
 #endif
+
+#define CURL_CA_CERT_ERRORMSG1                                          \
+  "More details here: http://curl.haxx.se/docs/sslcerts.html\n\n"       \
+  "curl performs SSL certificate verification by default, "             \
+  "using a \"bundle\"\n"                                                \
+  " of Certificate Authority (CA) public keys (CA certs). If the default\n" \
+  " bundle file isn't adequate, you can specify an alternate file\n"    \
+  " using the --cacert option.\n"
+
+#define CURL_CA_CERT_ERRORMSG2                                          \
+  "If this HTTPS server uses a certificate signed by a CA represented in\n" \
+  " the bundle, the certificate verification probably failed due to a\n" \
+  " problem with the certificate (it might be expired, or the name might\n" \
+  " not match the domain name in the URL).\n"                           \
+  "If you'd like to turn off curl's verification of the certificate, use\n" \
+  " the -k (or --insecure) option.\n"
 
 #ifdef CURL_DOES_CONVERSIONS
 #ifdef HAVE_ICONV
@@ -472,6 +503,7 @@ struct Configurable {
   char *cookiefile; /* read from this file */
   bool cookiesession; /* new session? */
   bool encoding;    /* Accept-Encoding please */
+  bool tr_encoding; /* Transfer-Encoding please */
   long authtype;    /* auth bitmask */
   bool use_resume;
   bool resume_from_current;
@@ -501,6 +533,9 @@ struct Configurable {
   long low_speed_time;
   bool showerror;
   char *userpwd;
+  char *tls_username;
+  char *tls_password;
+  char *tls_authtype;
   char *proxyuserpwd;
   char *proxy;
   int proxyver;     /* set to CURLPROXY_HTTP* define */
@@ -522,6 +557,7 @@ struct Configurable {
                               changed */
   bool netrc_opt;
   bool netrc;
+  char *netrc_file;
   bool noprogress;
   bool isatty;             /* updated internally only if the output is a tty */
   struct getout *url_list; /* point to the first node */
@@ -579,6 +615,7 @@ struct Configurable {
   struct curl_httppost *httppost;
   struct curl_httppost *last_post;
   struct curl_slist *telnet_options;
+  struct curl_slist *resolve;
   HttpReq httpreq;
 
   /* for bandwidth limiting features: */
@@ -618,9 +655,10 @@ struct Configurable {
   long alivetime;
   bool content_disposition; /* use Content-disposition filename */
 
-  int default_node_flags; /* default flags to seach for each 'node', which is
+  int default_node_flags; /* default flags to search for each 'node', which is
                              basically each given URL to transfer */
   struct OutStruct *outs;
+  bool xattr; /* store metadata in extended attributes */
 };
 
 #define WARN_PREFIX "Warning: "
@@ -769,7 +807,7 @@ static void help(void)
     " -K/--config <file> Specify which config file to read",
     "    --connect-timeout <seconds> Maximum time allowed for connection",
     " -C/--continue-at <offset> Resumed transfer offset",
-    " -b/--cookie <name=string/file> Cookie string or file to read cookies from (H)",
+    " -b/--cookie <name=string/file> String or file to read cookies from (H)",
     " -c/--cookie-jar <file> Write cookies to this file after operation (H)",
     "    --create-dirs   Create necessary local directory hierarchy",
     "    --crlf          Convert LF to CRLF in upload",
@@ -777,21 +815,23 @@ static void help(void)
     " -d/--data <data>   HTTP POST data (H)",
     "    --data-ascii <data>  HTTP POST ASCII data (H)",
     "    --data-binary <data> HTTP POST binary data (H)",
-    "    --data-urlencode <name=data/name@filename> HTTP POST data url encoded (H)",
+    "    --data-urlencode <name=data/name@filename> "
+    "HTTP POST data url encoded (H)",
     "    --digest        Use HTTP Digest Authentication (H)",
     "    --disable-eprt  Inhibit using EPRT or LPRT (F)",
     "    --disable-epsv  Inhibit using EPSV (F)",
     " -D/--dump-header <file> Write the headers to this file",
     "    --egd-file <file> EGD socket path for random data (SSL)",
-    "    --engine <eng>  Crypto engine to use (SSL). \"--engine list\" for list",
+    "    --engine <eng>  Crypto engine (SSL). \"--engine list\" for list",
 #ifdef USE_ENVIRONMENT
     "    --environment   Write results to environment variables (RISC OS)",
 #endif
     " -f/--fail          Fail silently (no output at all) on HTTP errors (H)",
     " -F/--form <name=content> Specify HTTP multipart POST data (H)",
     "    --form-string <name=string> Specify HTTP multipart POST data (H)",
-    "    --ftp-account <data> Account data to send when requested by server (F)",
-    "    --ftp-alternative-to-user <cmd> String to replace \"USER [name]\" (F)",
+    "    --ftp-account <data> Account data string (F)",
+    "    --ftp-alternative-to-user <cmd> "
+    "String to replace \"USER [name]\" (F)",
     "    --ftp-create-dirs Create the remote dirs if not present (F)",
     "    --ftp-method [multicwd/nocwd/singlecwd] Control CWD usage (F)",
     "    --ftp-pasv      Use PASV/EPSV instead of PORT (F)",
@@ -800,13 +840,15 @@ static void help(void)
     "    --ftp-pret      Send PRET before PASV (for drftpd) (F)",
     "    --ftp-ssl-ccc   Send CCC after authenticating (F)",
     "    --ftp-ssl-ccc-mode [active/passive] Set CCC mode (F)",
-    "    --ftp-ssl-control Require SSL/TLS for ftp login, clear for transfer (F)",
+    "    --ftp-ssl-control Require SSL/TLS for ftp login, "
+    "clear for transfer (F)",
     " -G/--get           Send the -d data with a HTTP GET (H)",
     " -g/--globoff       Disable URL sequences and ranges using {} and []",
     " -H/--header <line> Custom header to pass to server (H)",
     " -I/--head          Show document info only",
     " -h/--help          This help text",
-    "    --hostpubmd5 <md5> Hex encoded MD5 string of the host public key. (SSH)",
+    "    --hostpubmd5 <md5> "
+    "Hex encoded MD5 string of the host public key. (SSH)",
     " -0/--http1.0       Use HTTP 1.0 (H)",
     "    --ignore-content-length  Ignore the HTTP Content-Length header",
     " -i/--include       Include protocol headers in the output (H/F)",
@@ -835,6 +877,7 @@ static void help(void)
     "    --negotiate     Use HTTP Negotiate Authentication (H)",
     " -n/--netrc         Must read .netrc for user name and password",
     "    --netrc-optional Use either .netrc or URL; overrides -n",
+    "    --netrc-file <file> Set up the netrc filename to use",
     " -N/--no-buffer     Disable buffering of the output stream",
     "    --no-keepalive  Disable keepalive use on the connection",
     "    --no-sessionid  Disable SSL session-ID reusing (SSL)",
@@ -842,11 +885,14 @@ static void help(void)
     "    --ntlm          Use HTTP NTLM authentication (H)",
     " -o/--output <file> Write output to <file> instead of stdout",
     "    --pass  <pass>  Pass phrase for the private key (SSL/SSH)",
-    "    --post301       Do not switch to GET after following a 301 redirect (H)",
-    "    --post302       Do not switch to GET after following a 302 redirect (H)",
+    "    --post301       "
+    "Do not switch to GET after following a 301 redirect (H)",
+    "    --post302       "
+    "Do not switch to GET after following a 302 redirect (H)",
     " -#/--progress-bar  Display transfer progress as a progress bar",
     "    --proto <protocols>       Enable/disable specified protocols",
-    "    --proto-redir <protocols> Enable/disable specified protocols on redirect",
+    "    --proto-redir <protocols> "
+    "Enable/disable specified protocols on redirect",
     " -x/--proxy <host[:port]> Use HTTP proxy on given port",
     "    --proxy-anyauth Pick \"any\" proxy authentication method (H)",
     "    --proxy-basic   Use Basic authentication on the proxy (H)",
@@ -857,7 +903,7 @@ static void help(void)
     "    --proxy1.0 <host[:port]> Use HTTP/1.0 proxy on given port",
     " -p/--proxytunnel   Operate through a HTTP proxy tunnel (using CONNECT)",
     "    --pubkey <key>  Public key file name (SSH)",
-    " -Q/--quote <cmd>   Send command(s) to server before file transfer (F/SFTP)",
+    " -Q/--quote <cmd>   Send command(s) to server before transfer (F/SFTP)",
     "    --random-file <file> File for reading random data from (SSL)",
     " -r/--range <range> Retrieve only the bytes within a range",
     "    --raw           Pass HTTP \"raw\", without any transfer decoding (H)",
@@ -866,21 +912,28 @@ static void help(void)
     "    --remote-name-all Use the remote file name for all URLs",
     " -R/--remote-time   Set the remote file's time on the local output",
     " -X/--request <command> Specify request command to use",
-    "    --retry <num>   Retry request <num> times if transient problems occur",
-    "    --retry-delay <seconds> When retrying, wait this many seconds between each",
+    "    --resolve <host:port:address> Force resolve of HOST:PORT to ADDRESS",
+    "    --retry <num>   "
+    "Retry request <num> times if transient problems occur",
+    "    --retry-delay <seconds> "
+    "When retrying, wait this many seconds between each",
     "    --retry-max-time <seconds> Retry only within this period",
-    " -S/--show-error    Show error. With -s, make curl show errors when they occur",
+    " -S/--show-error    "
+    "Show error. With -s, make curl show errors when they occur",
     " -s/--silent        Silent mode. Don't output anything",
     "    --socks4 <host[:port]> SOCKS4 proxy on given host + port",
     "    --socks4a <host[:port]> SOCKS4a proxy on given host + port",
     "    --socks5 <host[:port]> SOCKS5 proxy on given host + port",
-    "    --socks5-hostname <host[:port]> SOCKS5 proxy, pass host name to proxy",
+    "    --socks5-hostname <host[:port]> "
+    "SOCKS5 proxy, pass host name to proxy",
 #if defined(HAVE_GSSAPI) || defined(USE_WINDOWS_SSPI)
     "    --socks5-gssapi-service <name> SOCKS5 proxy service name for gssapi",
     "    --socks5-gssapi-nec  Compatibility with NEC SOCKS5 server",
 #endif
-    " -Y/--speed-limit   Stop transfer if below speed-limit for 'speed-time' secs",
-    " -y/--speed-time    Time needed to trig speed-limit abort. Defaults to 30",
+    " -Y/--speed-limit   "
+    "Stop transfer if below speed-limit for 'speed-time' secs",
+    " -y/--speed-time    "
+    "Time needed to trig speed-limit abort. Defaults to 30",
     "    --ssl           Try SSL/TLS (FTP, IMAP, POP3, SMTP)",
     "    --ssl-reqd      Require SSL/TLS (FTP, IMAP, POP3, SMTP)",
     " -2/--sslv2         Use SSLv2 (SSL)",
@@ -894,10 +947,14 @@ static void help(void)
     "    --trace <file>  Write a debug trace to the given file",
     "    --trace-ascii <file> Like --trace but without the hex output",
     "    --trace-time    Add time stamps to trace/verbose output",
+    "    --tr-encoding   Request compressed transfer encoding (H)",
     " -T/--upload-file <file> Transfer <file> to remote site",
     "    --url <URL>     Set URL to work with",
     " -B/--use-ascii     Use ASCII/text transfer",
     " -u/--user <user[:password]> Set server user and password",
+    "    --tlsuser     <user> Set TLS username",
+    "    --tlspassword <string> Set TLS password",
+    "    --tlsauthtype <string> Set TLS authentication type (default SRP)",
     " -A/--user-agent <string> User-Agent to send to server (H)",
     " -v/--verbose       Make the operation more talkative",
     " -V/--version       Show version number and quit",
@@ -906,6 +963,7 @@ static void help(void)
     "    --wdebug        Turn on Watt-32 debugging",
 #endif
     " -w/--write-out <format> What to output after completion",
+    "    --xattr         Store metadata in extended file attributes",
     " -q                 If used as the first parameter disables .curlrc",
     NULL
   };
@@ -1076,7 +1134,7 @@ static void list_engines(const struct curl_slist *engines)
     puts("  <none>");
     return;
   }
-  for( ; engines; engines = engines->next)
+  for(; engines; engines = engines->next)
     printf("  %s\n", engines->data);
 }
 
@@ -1138,7 +1196,7 @@ static int formparse(struct Configurable *config,
   char *sep2;
 
   if((1 == sscanf(input, "%255[^=]=", name)) &&
-     (contp = strchr(input, '='))) {
+     ((contp = strchr(input, '=')) != NULL)) {
     /* the input was using the correct format */
 
     /* Allocate the contents */
@@ -1278,15 +1336,13 @@ static int formparse(struct Configurable *config,
           ++count;
         }
         forms = malloc((count+1)*sizeof(struct curl_forms));
-        if(!forms)
-        {
+        if(!forms) {
           fprintf(config->errors, "Error building form post!\n");
           free(contents);
           FreeMultiInfo(multi_start);
           return 4;
         }
-        for(i = 0, ptr = multi_start; i < count; ++i, ptr = ptr->next)
-        {
+        for(i = 0, ptr = multi_start; i < count; ++i, ptr = ptr->next) {
           forms[i].option = ptr->form.option;
           forms[i].value = ptr->form.value;
         }
@@ -1319,7 +1375,7 @@ static int formparse(struct Configurable *config,
         ct[0]=0; /* zero terminate here */
       }
 
-      if( contp[0]=='<' && !literal_value) {
+      if(contp[0]=='<' && !literal_value) {
         info[i].option = CURLFORM_FILECONTENT;
         info[i].value = contp+1;
         i++;
@@ -1503,12 +1559,15 @@ static void cleanarg(char *str)
 
 static int str2num(long *val, const char *str)
 {
-  int retcode = 0;
-  if(str && ISDIGIT(*str))
-    *val = atoi(str);
-  else
-    retcode = 1; /* badness */
-  return retcode;
+  if(str && ISDIGIT(*str)) {
+    char *endptr;
+    long num = strtol(str, &endptr, 10);
+    if((endptr != str) && (endptr == str + strlen(str))) {
+      *val = num;
+      return 0;  /* Ok */
+    }
+  }
+  return 1; /* badness */
 }
 
 /*
@@ -1750,6 +1809,10 @@ static int sockoptcallback(void *clientp, curl_socket_t curlfd,
           return 0;
         }
 #endif
+#if !defined(TCP_KEEPIDLE) || !defined(TCP_KEEPINTVL)
+        warnf(clientp, "Keep-alive functionality somewhat crippled due to "
+              "missing support in your operating system!\n");
+#endif
       }
     }
     break;
@@ -1802,7 +1865,8 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
     {"*g", "trace",      TRUE},
     {"*h", "trace-ascii", TRUE},
     {"*i", "limit-rate", TRUE},
-    {"*j", "compressed",  FALSE}, /* might take an arg someday */
+    {"*j", "compressed",  FALSE},
+    {"*J", "tr-encoding",  FALSE},
     {"*k", "digest",     FALSE},
     {"*l", "negotiate",  FALSE},
     {"*m", "ntlm",       FALSE},
@@ -1877,6 +1941,7 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
     {"$C", "ftp-pret",   FALSE},
     {"$D", "proto",      TRUE},
     {"$E", "proto-redir", TRUE},
+    {"$F", "resolve",    TRUE},
     {"0", "http1.0",     FALSE},
     {"1", "tlsv1",       FALSE},
     {"2", "sslv2",       FALSE},
@@ -1906,6 +1971,9 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
     {"Eh","pubkey",      TRUE},
     {"Ei", "hostpubmd5", TRUE},
     {"Ej","crlfile",     TRUE},
+    {"Ek","tlsuser",     TRUE},
+    {"El","tlspassword", TRUE},
+    {"Em","tlsauthtype", TRUE},
     {"f", "fail",        FALSE},
     {"F", "form",        TRUE},
     {"Fs","form-string", TRUE},
@@ -1926,6 +1994,7 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
     {"M", "manual",      FALSE},
     {"n", "netrc",       FALSE},
     {"no", "netrc-optional", FALSE},
+    {"ne", "netrc-file", TRUE},
     {"N", "buffer",   FALSE}, /* listed as --no-buffer in the help */
     {"o", "output",      TRUE},
     {"O",  "remote-name", FALSE},
@@ -1953,6 +2022,7 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
     {"y", "speed-time", TRUE},
     {"z", "time-cond",   TRUE},
     {"#", "progress-bar",FALSE},
+    {"~", "xattr",FALSE},
   };
 
   if(('-' != flag[0]) ||
@@ -2116,7 +2186,13 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
       break;
 
       case 'j': /* --compressed */
+        if(toggle && !(curlinfo->features & CURL_VERSION_LIBZ))
+          return PARAM_LIBCURL_DOESNT_SUPPORT;
         config->encoding = toggle;
+        break;
+
+      case 'J': /* --tr-encoding */
+        config->tr_encoding = toggle;
         break;
 
       case 'k': /* --digest */
@@ -2233,7 +2309,7 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
       default: /* the URL! */
       {
         struct getout *url;
-        if(config->url_get || (config->url_get=config->url_list)) {
+        if(config->url_get || ((config->url_get = config->url_list) != NULL)) {
           /* there's a node here, if it already is filled-in continue to find
              an "empty" node */
           while(config->url_get && (config->url_get->flags&GETOUT_URL))
@@ -2260,6 +2336,8 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
     case '$': /* more options without a short option */
       switch(subletter) {
       case 'a': /* --ftp-ssl */
+        if(toggle && !(curlinfo->features & CURL_VERSION_SSL))
+          return PARAM_LIBCURL_DOESNT_SUPPORT;
         config->ftp_ssl = toggle;
         break;
       case 'b': /* --ftp-pasv */
@@ -2351,12 +2429,16 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
         GetStr(&config->ftp_alternative_to_user, nextarg);
         break;
       case 'v': /* --ftp-ssl-reqd */
+        if(toggle && !(curlinfo->features & CURL_VERSION_SSL))
+          return PARAM_LIBCURL_DOESNT_SUPPORT;
         config->ftp_ssl_reqd = toggle;
         break;
       case 'w': /* --no-sessionid */
         config->disable_sessionid = (bool)(!toggle);
         break;
       case 'x': /* --ftp-ssl-control */
+        if(toggle && !(curlinfo->features & CURL_VERSION_SSL))
+          return PARAM_LIBCURL_DOESNT_SUPPORT;
         config->ftp_ssl_control = toggle;
         break;
       case 'y': /* --ftp-ssl-ccc */
@@ -2429,6 +2511,11 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
         if(proto2num(config, &config->proto_redir, nextarg))
           return PARAM_BAD_USE;
         break;
+      case 'F': /* --resolve */
+        err = add2list(&config->resolve, nextarg);
+        if(err)
+          return err;
+        break;
       }
       break;
     case '#': /* --progress-bar */
@@ -2436,6 +2523,9 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
         config->progressmode = CURL_PROGRESS_BAR;
       else
         config->progressmode = CURL_PROGRESS_STATS;
+      break;
+    case '~': /* --xattr */
+      config->xattr = toggle;
       break;
     case '0':
       /* HTTP version 1.0 */
@@ -2482,7 +2572,7 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
       GetStr(&config->cookiefile, nextarg);
       break;
     case 'B':
-      /* use ASCII/text when transfering */
+      /* use ASCII/text when transferring */
       config->use_ascii = toggle;
       break;
     case 'c':
@@ -2717,6 +2807,27 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
         /* CRL file */
         GetStr(&config->crlfile, nextarg);
         break;
+      case 'k': /* TLS username */
+        if(curlinfo->features & CURL_VERSION_TLSAUTH_SRP)
+          GetStr(&config->tls_username, nextarg);
+        else
+          return PARAM_LIBCURL_DOESNT_SUPPORT;
+        break;
+      case 'l': /* TLS password */
+        if(curlinfo->features & CURL_VERSION_TLSAUTH_SRP)
+          GetStr(&config->tls_password, nextarg);
+        else
+          return PARAM_LIBCURL_DOESNT_SUPPORT;
+        break;
+      case 'm': /* TLS authentication type */
+        if(curlinfo->features & CURL_VERSION_TLSAUTH_SRP) {
+          GetStr(&config->tls_authtype, nextarg);
+          if(!strequal(config->tls_authtype, "SRP"))
+            return PARAM_LIBCURL_DOESNT_SUPPORT; /* only support TLS-SRP */
+        }
+        else
+          return PARAM_LIBCURL_DOESNT_SUPPORT;
+        break;
       default: /* certificate file */
       {
         char *ptr = strchr(nextarg, ':');
@@ -2854,6 +2965,9 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
         /* use .netrc or URL */
         config->netrc_opt = toggle;
         break;
+      case 'e': /* netrc-file */
+        GetStr(&config->netrc_file, nextarg);
+        break;
       default:
         /* pick info from .netrc, if this is used for http, curl will
            automatically enfore user+password with the request */
@@ -2879,7 +2993,7 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
       /* output file */
     {
       struct getout *url;
-      if(config->url_out || (config->url_out=config->url_list)) {
+      if(config->url_out || ((config->url_out = config->url_list) != NULL)) {
         /* there's a node here, if it already is filled-in continue to find
            an "empty" node */
         while(config->url_out && (config->url_out->flags&GETOUT_OUTFILE))
@@ -3007,7 +3121,7 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
       /* we are uploading */
     {
       struct getout *url;
-      if(config->url_out || (config->url_out=config->url_list)) {
+      if(config->url_out || ((config->url_out = config->url_list) != NULL)) {
         /* there's a node here, if it already is filled-in continue to find
            an "empty" node */
         while(config->url_out && (config->url_out->flags&GETOUT_UPLOAD))
@@ -3095,7 +3209,8 @@ static ParameterError getparameter(char *flag, /* f or -long-flag */
           {"SSPI",  CURL_VERSION_SSPI},
           {"krb4", CURL_VERSION_KERBEROS4},
           {"libz", CURL_VERSION_LIBZ},
-          {"CharConv", CURL_VERSION_CONV}
+          {"CharConv", CURL_VERSION_CONV},
+          {"TLS-SRP", CURL_VERSION_TLSAUTH_SRP}
         };
         printf("Features: ");
         for(i=0; i<sizeof(feats)/sizeof(feats[0]); i++) {
@@ -3420,8 +3535,7 @@ static int parseconfig(const char *filename,
         }
       }
 
-      if(alloced_param)
-      {
+      if(alloced_param) {
         free(param);
         param = NULL;
       }
@@ -3639,7 +3753,7 @@ static int myprogress (void *clientp,
   if(total < 1) {
     curl_off_t prevblock = bar->prev / 1024;
     curl_off_t thisblock = point / 1024;
-    while( thisblock > prevblock ) {
+    while(thisblock > prevblock) {
       fprintf( bar->out, "#" );
       prevblock++;
     }
@@ -3649,9 +3763,8 @@ static int myprogress (void *clientp,
     percent = frac * 100.0f;
     barwidth = bar->width - 7;
     num = (int) (((double)barwidth) * frac);
-    for( i = 0; i < num; i++ ) {
+    for(i = 0; i < num; i++)
       line[i] = '#';
-    }
     line[i] = '\0';
     snprintf( format, sizeof(format), "%%-%ds %%5.1f%%%%", barwidth );
     snprintf( outline, sizeof(outline), format, line, percent );
@@ -3689,7 +3802,12 @@ void progressbarinit(struct ProgressData *bar,
    * we're using our own way to determine screen width */
   colp = curlx_getenv("COLUMNS");
   if(colp != NULL) {
-    bar->width = atoi(colp);
+    char *endptr;
+    long num = strtol(colp, &endptr, 10);
+    if((endptr != colp) && (endptr == colp + strlen(colp)) && (num > 0))
+      bar->width = (int)num;
+    else
+      bar->width = 79;
     curl_free(colp);
   }
   else
@@ -3899,7 +4017,7 @@ int my_trace(CURL *handle, curl_infotype type,
     size_t i;
     for(i = 0; i < size - 4; i++) {
       if(memcmp(&data[i], "\r\n\r\n", 4) == 0) {
-        /* dump everthing through the CRLFCRLF as a sent header */
+        /* dump everything through the CRLFCRLF as a sent header */
         text = "=> Send header";
         dump(timebuf, text, output, data, i+4, config->tracetype, type);
         data += i + 3;
@@ -3980,6 +4098,8 @@ static void free_config_fields(struct Configurable *config)
     free(config->writeout);
   if(config->httppost)
     curl_formfree(config->httppost);
+  if(config->netrc_file)
+    free(config->netrc_file);
   if(config->cert)
     free(config->cert);
   if(config->cacert)
@@ -4016,6 +4136,14 @@ static void free_config_fields(struct Configurable *config)
     free(config->hostpubmd5);
   if(config->mail_from)
     free(config->mail_from);
+#ifdef USE_TLS_SRP
+  if(config->tls_authtype)
+    free(config->tls_authtype);
+  if(config->tls_username)
+    free(config->tls_username);
+  if(config->tls_password)
+    free(config->tls_password);
+#endif
 #if defined(HAVE_GSSAPI) || defined(USE_WINDOWS_SSPI)
   if(config->socks5_gssapi_service)
     free(config->socks5_gssapi_service);
@@ -4027,6 +4155,7 @@ static void free_config_fields(struct Configurable *config)
   curl_slist_free_all(config->headers);
   curl_slist_free_all(config->telnet_options);
   curl_slist_free_all(config->mail_rcpt);
+  curl_slist_free_all(config->resolve);
 
   if(config->easy)
     curl_easy_cleanup(config->easy);
@@ -4102,7 +4231,7 @@ static CURLcode _my_setopt(CURL *curl, bool str, struct Configurable *config,
 
   if(tag < CURLOPTTYPE_OBJECTPOINT) {
     long lval = va_arg(arg, long);
-    snprintf(value, sizeof(value), "%ld", lval);
+    snprintf(value, sizeof(value), "%ldL", lval);
     ret = curl_easy_setopt(curl, tag, lval);
     if(!lval)
       skip = TRUE;
@@ -4172,15 +4301,9 @@ static CURLcode _my_setopt(CURL *curl, bool str, struct Configurable *config,
 
 static const char * const srchead[]={
   "/********* Sample code generated by the curl command line tool **********",
-  " * Add error code checking where appropriate!",
-  " * Compile this with a suitable header include path. Then link with ",
-  " * libcurl.",
-  " * If you use any *_LARGE options, make sure your compiler figure",
-  " * out the correct size for the curl_off_t variable.",
-  " * Read the details for all curl_easy_setopt() options online on:",
-  " * http://curlm.haxx.se/libcurl/c/curl_easy_setopt.html",
+  " * All curl_easy_setopt() options are documented at:",
+  " * http://curl.haxx.se/libcurl/c/curl_easy_setopt.html",
   " ************************************************************************/",
-  "[m]",
   "#include <curl/curl.h>",
   "",
   "int main(int argc, char *argv[])",
@@ -4209,17 +4332,8 @@ static void dumpeasycode(struct Configurable *config)
       int i;
       const char *c;
 
-      for(i=0; (c = srchead[i]); i++) {
-        if(!memcmp((char *)c, "[m]", 3)) {
-#if defined(_FILE_OFFSET_BITS) && (_FILE_OFFSET_BITS > 32)
-          fprintf(out, "#define _FILE_OFFSET_BITS %d "
-                  "/* for pre libcurl 7.19.0 curl_off_t magic */\n",
-                  _FILE_OFFSET_BITS);
-#endif
-        }
-        else
-          fprintf(out, "%s\n", c);
-      }
+      for(i=0; ((c = srchead[i]) != '\0'); i++)
+        fprintf(out, "%s\n", c);
 
       ptr = easycode;
       while(ptr) {
@@ -4368,6 +4482,18 @@ parse_filename(char *ptr, size_t len)
     }
   }
 
+  /* If the filename contains a backslash, only use filename portion. The idea
+     is that even systems that don't handle backslashes as path separators
+     probably want the path removed for convenience. */
+  q = strrchr(p, '\\');
+  if(q) {
+    p = q+1;
+    if(!*p) {
+      free(copy);
+      return NULL;
+    }
+  }
+
   if(quote) {
     /* if the file name started with a quote, then scan for the end quote and
        stop there */
@@ -4493,7 +4619,10 @@ operate(struct Configurable *config, int argc, argv_item_t argv[])
   }
   env = curlx_getenv("CURL_MEMLIMIT");
   if(env) {
-    curl_memlimit(atoi(env));
+    char *endptr;
+    long num = strtol(env, &endptr, 10);
+    if((endptr != env) && (endptr == env + strlen(env)) && (num > 0))
+      curl_memlimit(num);
     curl_free(env);
   }
 #endif
@@ -4765,9 +4894,9 @@ operate(struct Configurable *config, int argc, argv_item_t argv[])
        single globbed string. If no upload, we enter the loop once anyway. */
     for(up = 0;
         (!up && !infiles) ||
-          (uploadfile = inglob?
+          ((uploadfile = inglob?
            glob_next_url(inglob):
-           (!up?strdup(infiles):NULL));
+           (!up?strdup(infiles):NULL)) != NULL);
         up++) {
       int separator = 0;
       long retry_numretries;
@@ -4790,7 +4919,7 @@ operate(struct Configurable *config, int argc, argv_item_t argv[])
 
       /* Here's looping around each globbed URL */
       for(i = 0;
-          (url = urls?glob_next_url(urls):(i?NULL:strdup(url)));
+          ((url = urls?glob_next_url(urls):(i?NULL:strdup(url))) != NULL);
           i++) {
         /* NOTE: In the condition expression in the for() statement above, the
            'url' variable is only ever strdup()ed if(i == 0) and thus never
@@ -4846,7 +4975,7 @@ operate(struct Configurable *config, int argc, argv_item_t argv[])
             }
           }
 
-          /* Create the directory hierarchy, if not pre-existant to a multiple
+          /* Create the directory hierarchy, if not pre-existent to a multiple
              file output call */
 
           if(config->create_dirs &&
@@ -5107,10 +5236,13 @@ operate(struct Configurable *config, int argc, argv_item_t argv[])
 
         if(config->netrc_opt)
           my_setopt(curl, CURLOPT_NETRC, CURL_NETRC_OPTIONAL);
-        else if(config->netrc)
+        else if(config->netrc || config->netrc_file)
           my_setopt(curl, CURLOPT_NETRC, CURL_NETRC_REQUIRED);
         else
           my_setopt(curl, CURLOPT_NETRC, CURL_NETRC_IGNORED);
+
+        if(config->netrc_file)
+          my_setopt(curl, CURLOPT_NETRC_FILE, config->netrc_file);
 
         my_setopt(curl, CURLOPT_FOLLOWLOCATION, config->followlocation);
         my_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, config->unrestricted_auth);
@@ -5294,9 +5426,11 @@ operate(struct Configurable *config, int argc, argv_item_t argv[])
         if(res != CURLE_OK)
           goto show_error;
 
-        /* new in curl 7.10 */
-        my_setopt_str(curl, CURLOPT_ENCODING,
-                      (config->encoding) ? "" : NULL);
+        if(config->encoding)
+          my_setopt_str(curl, CURLOPT_ACCEPT_ENCODING, "");
+
+        if(config->tr_encoding)
+          my_setopt(curl, CURLOPT_TRANSFER_ENCODING, 1);
 
         /* new in curl 7.10.7, extended in 7.19.4 but this only sets 0 or 1 */
         my_setopt(curl, CURLOPT_FTP_CREATE_MISSING_DIRS,
@@ -5424,6 +5558,14 @@ operate(struct Configurable *config, int argc, argv_item_t argv[])
           my_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback);
           my_setopt(curl, CURLOPT_HEADERDATA, &outs);
         }
+
+        if(config->resolve)
+          /* new in 7.21.3 */
+          my_setopt(curl, CURLOPT_RESOLVE, config->resolve);
+
+        /* TODO: new in ### */
+        curl_easy_setopt(curl, CURLOPT_TLSAUTH_USERNAME, config->tls_username);
+        curl_easy_setopt(curl, CURLOPT_TLSAUTH_PASSWORD, config->tls_password);
 
         retry_numretries = config->req_retry;
 
@@ -5588,30 +5730,23 @@ operate(struct Configurable *config, int argc, argv_item_t argv[])
                     errorbuffer[0]? errorbuffer:
                     curl_easy_strerror((CURLcode)res));
             if(CURLE_SSL_CACERT == res) {
-#define CURL_CA_CERT_ERRORMSG1                                          \
-              "More details here: http://curl.haxx.se/docs/sslcerts.html\n\n" \
-                "curl performs SSL certificate verification by default, using a \"bundle\"\n" \
-                " of Certificate Authority (CA) public keys (CA certs). If the default\n" \
-                " bundle file isn't adequate, you can specify an alternate file\n" \
-                " using the --cacert option.\n"
-
-#define CURL_CA_CERT_ERRORMSG2                                          \
-              "If this HTTPS server uses a certificate signed by a CA represented in\n" \
-                " the bundle, the certificate verification probably failed due to a\n" \
-                " problem with the certificate (it might be expired, or the name might\n" \
-                " not match the domain name in the URL).\n"             \
-                "If you'd like to turn off curl's verification of the certificate, use\n" \
-                " the -k (or --insecure) option.\n"
-
               fprintf(config->errors, "%s%s",
                       CURL_CA_CERT_ERRORMSG1,
                       CURL_CA_CERT_ERRORMSG2 );
             }
           }
         }
-
         if(outfile && !curlx_strequal(outfile, "-") && outs.stream) {
-          int rc = fclose(outs.stream);
+          int rc;
+
+          if(config->xattr) {
+            rc = fwrite_xattr(curl, fileno(outs.stream) );
+            if(rc)
+              warnf(config, "Error setting extended attributes: %s\n",
+                    strerror(errno) );
+          }
+
+          rc = fclose(outs.stream);
           if(!res && rc) {
             /* something went wrong in the writing process */
             res = CURLE_WRITE_ERROR;
@@ -5637,7 +5772,7 @@ operate(struct Configurable *config, int argc, argv_item_t argv[])
 #ifdef __AMIGA__
         /* Set the url as comment for the file. (up to 80 chars are allowed)
          */
-        if( strlen(url) > 78 )
+        if(strlen(url) > 78)
           url[79] = '\0';
 
         SetComment( outs.filename, url);
@@ -5733,12 +5868,12 @@ static void checkfds(void)
 {
 #ifdef HAVE_PIPE
   int fd[2] = { STDIN_FILENO, STDIN_FILENO };
-  while( fd[0] == STDIN_FILENO ||
-         fd[0] == STDOUT_FILENO ||
-         fd[0] == STDERR_FILENO ||
-         fd[1] == STDIN_FILENO ||
-         fd[1] == STDOUT_FILENO ||
-         fd[1] == STDERR_FILENO )
+  while(fd[0] == STDIN_FILENO ||
+        fd[0] == STDOUT_FILENO ||
+        fd[0] == STDERR_FILENO ||
+        fd[1] == STDIN_FILENO ||
+        fd[1] == STDOUT_FILENO ||
+        fd[1] == STDERR_FILENO)
     if(pipe(fd) < 0)
       return;   /* Out of handles. This isn't really a big problem now, but
                    will be when we try to create a socket later. */

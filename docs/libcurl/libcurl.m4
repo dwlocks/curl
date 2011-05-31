@@ -73,11 +73,10 @@ AC_DEFUN([LIBCURL_CHECK_CONFIG],
      _libcurl_try_link=yes
 
      if test -d "$_libcurl_with" ; then
-	libcurl_with_prefix=`dirname $withval`
-        LIBCURL_CPPFLAGS="-I$libcurl_with_prefix/include"
-        _libcurl_ldflags="-L$withval"
+        LIBCURL_CPPFLAGS="-I$withval/include"
+        _libcurl_ldflags="-L$withval/lib"
         AC_PATH_PROG([_libcurl_config],[curl-config],[],
-                     ["$libcurl_with_prefix/bin"])
+                     ["$withval/bin"])
      else
         AC_PATH_PROG([_libcurl_config],[curl-config],[],[$PATH])
      fi
@@ -147,7 +146,7 @@ AC_DEFUN([LIBCURL_CHECK_CONFIG],
            _libcurl_save_libs=$LIBS
            LIBS="$LIBCURL $LIBS"
 
-           AC_LINK_IFELSE(AC_LANG_PROGRAM([#include <curl/curl.h>],[
+           AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <curl/curl.h>],[
 /* Try and use a few common options to force a failure if we are
    missing symbols or can't link. */
 int x;
@@ -158,7 +157,7 @@ x=CURLOPT_FILE;
 x=CURLOPT_ERRORBUFFER;
 x=CURLOPT_STDERR;
 x=CURLOPT_VERBOSE;
-]),libcurl_cv_lib_curl_usable=yes,libcurl_cv_lib_curl_usable=no)
+])],libcurl_cv_lib_curl_usable=yes,libcurl_cv_lib_curl_usable=no)
 
            CPPFLAGS=$_libcurl_save_cppflags
            LIBS=$_libcurl_save_libs

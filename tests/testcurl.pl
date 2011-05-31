@@ -6,7 +6,7 @@
 #                            | (__| |_| |  _ <| |___
 #                             \___|\___/|_| \_\_____|
 #
-# Copyright (C) 1998 - 2010, Daniel Stenberg, <daniel@haxx.se>, et al.
+# Copyright (C) 1998 - 2011, Daniel Stenberg, <daniel@haxx.se>, et al.
 #
 # This software is licensed as described in the file COPYING, which
 # you should have received as part of this distribution. The terms
@@ -49,6 +49,7 @@
 # --nocvsup                Don't pull from git even though it is a git tree
 # --nogitpull              Don't pull from git even though it is a git tree
 # --nobuildconf            Don't run buildconf
+# --noconfigure            Don't run configure
 # --runtestopts=[options]  Options to pass to runtests.pl
 # --setup=[file name]      File name to read setup from (deprecated)
 # --target=[your os]       Specify your target environment.
@@ -84,6 +85,7 @@ if (-f ".git/config") {
 
 $git=1;
 $setupfile = 'setup';
+$configurebuild = 1;
 while ($ARGV[0]) {
   if ($ARGV[0] =~ /--target=/) {
     $targetos = (split(/=/, shift @ARGV))[1];
@@ -106,8 +108,9 @@ while ($ARGV[0]) {
   elsif ($ARGV[0] =~ /--desc=/) {
     $desc = (split(/=/, shift @ARGV))[1];
   }
-  elsif ($ARGV[0] =~ /--configure=/) {
-    $confopts = (split(/=/, shift @ARGV))[1];
+  elsif ($ARGV[0] =~ /--configure=(.*)/) {
+    $confopts = $1;
+    shift @ARGV;
   }
   elsif (($ARGV[0] eq "--nocvsup") || ($ARGV[0] eq "--nogitpull")) {
     $nogitpull=1;
@@ -115,6 +118,10 @@ while ($ARGV[0]) {
   }
   elsif ($ARGV[0] =~ /--nobuildconf/) {
     $nobuildconf=1;
+    shift @ARGV;
+  }
+  elsif ($ARGV[0] =~ /--noconfigure/) {
+    $configurebuild=0;
     shift @ARGV;
   }
   elsif ($ARGV[0] =~ /--crosscompile/) {
@@ -131,7 +138,6 @@ while ($ARGV[0]) {
 }
 
 # Do the platform-specific stuff here
-$configurebuild = 1;
 $confheader = 'curl_config.h';
 $binext = '';
 $libext = '.la'; # .la since both libcurl and libcares are made with libtool

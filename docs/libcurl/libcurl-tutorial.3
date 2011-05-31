@@ -283,6 +283,10 @@ yassl
 
  Required actions unknown.
 
+axTLS
+
+ Required actions unknown.
+
 When using multiple threads you should set the CURLOPT_NOSIGNAL option to 1
 for all handles. Everything will or might work fine except that timeouts are
 not honored during the DNS lookup - which you can work around by building
@@ -1236,6 +1240,15 @@ CURLOPT_USERAGENT, CURLOPT_HTTPHEADER, CURLOPT_POSTFIELDS and others that
 are used to generate structured data. Characters like embedded carriage
 returns or ampersands could allow the user to create additional headers or
 fields that could cause malicious transactions.
+
+.IP "Server-supplied Names"
+A server can supply data which the application may, in some cases, use as
+a file name. The curl command-line tool does this with --remote-header-name,
+using the Content-disposition: header to generate a file name.  An application
+could also use CURLINFO_EFFECTIVE_URL to generate a file name from a
+server-supplied redirect URL. Special care must be taken to sanitize such
+names to avoid the possibility of a malicious server supplying one like
+"/etc/passwd", "\autoexec.bat" or even ".bashrc".
 
 .IP "Server Certificates"
 A secure application should never use the CURLOPT_SSL_VERIFYPEER option to

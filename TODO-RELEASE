@@ -1,17 +1,15 @@
-To be addressed in 7.21.2
+To be addressed in 7.21.6
 =========================
 
-268 - 3076430 SFTP resume with 4GB file does not work
+284 - bug 3172608 "No re-authentication when HTTP connecton is closed"
+      http://curl.haxx.se/bug/view.cgi?id=3172608
+      Would be nice if someone could verify the suggested patch
 
-271 -
+285 - bug 3163118 "Allow programatic use of telnet on Windows"
+      http://curl.haxx.se/bug/view.cgi?id=3163118
+      Would appreciate a Windows developer to give it a look before we apply
+      the suggested patch
 
-To be addressed in 7.21.3
-=========================
+287 - bug 3215314 Post quote operation to rename fails in Windows
 
-262 - Manual setting of TLS Server Name Indication - use Host:
-
-263 - Support binding DNS to local interface/IP
-
-265 - 1. FTP cmd channel and data channel validation
-
-267 - 2. Cert chain for data channel
+289 -

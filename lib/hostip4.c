@@ -77,9 +77,9 @@
  * Curl_ipvalid() checks what CURL_IPRESOLVE_* requirements that might've
  * been set and returns TRUE if they are OK.
  */
-bool Curl_ipvalid(struct SessionHandle *data)
+bool Curl_ipvalid(struct connectdata *conn)
 {
-  if(data->set.ip_version == CURL_IPRESOLVE_V6)
+  if(conn->ip_version == CURL_IPRESOLVE_V6)
     /* an ipv6 address was requested and we can't get/use one */
     return FALSE;
 
@@ -87,6 +87,7 @@ bool Curl_ipvalid(struct SessionHandle *data)
 }
 
 #ifdef CURLRES_SYNCH
+
 /*
  * Curl_getaddrinfo() - the ipv4 synchronous version.
  *
